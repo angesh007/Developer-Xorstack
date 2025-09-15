@@ -14,7 +14,7 @@
    ```
 4. Set OpenAI key in .env  file :
    ```
-   export OPENAI_API_KEY="sk-..."
+    OPENAI_API_KEY="sk-..."
    ```
 5. Run API:
    ```
