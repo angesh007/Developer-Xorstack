@@ -1,0 +1,85 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8"/>
+  <title>AI Extractor — Upload</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <style>
+    :root{--bg:#0f1724;--card:#0b1220;--muted:#94a3b8;--accent:#06b6d4;--btn:#06b6d4}
+    body{font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,"Helvetica Neue",Arial;margin:0;background:linear-gradient(180deg,#071026 0%,#071827 100%);color:#e6eef6;display:flex;align-items:center;justify-content:center;height:100vh}
+    .card{width:min(920px,95%);background:linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));padding:28px;border-radius:12px;box-shadow:0 8px 30px rgba(2,6,23,0.7)}
+    h1{margin:0 0 8px;font-size:20px}
+    p.desc{margin:0 0 18px;color:var(--muted)}
+    textarea{width:100%;min-height:160px;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;resize:vertical}
+    .row{display:flex;gap:12px;align-items:center}
+    .file{padding:12px;border-radius:8px;border:1px dashed rgba(255,255,255,0.04);display:inline-block}
+    button{background:var(--btn);color:#022;border:none;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer}
+    pre{white-space:pre-wrap;background:#021426;padding:12px;border-radius:8px;color:#cfe9f2;overflow:auto;max-height:320px}
+    footer{margin-top:12px;color:var(--muted);font-size:13px}
+    @media (max-width:600px){.row{flex-direction:column;align-items:stretch}}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>AI Extractor — Upload text or file</h1>
+    <p class="desc">Paste text or upload a .txt file. Click Send. Results will show below and saved to the server CSV.</p>
+
+    <form id="frm">
+      <textarea id="txt" placeholder="Paste text here..."></textarea>
+      <div class="row" style="margin-top:12px">
+        <label class="file">
+          <input id="file" type="file" accept=".txt" style="display:none" />
+          <span id="fileLabel">Choose .txt file</span>
+        </label>
+        <button id="send" type="submit">Send</button>
+        <button id="clear" type="button" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)">Clear</button>
+      </div>
+    </form>
+
+    <h3 style="margin-top:18px">Response</h3>
+    <pre id="out">No response yet.</pre>
+    <footer>Powered by your AI Extract API — do not paste sensitive data unless approved.</footer>
+  </div>
+
+<script>
+const form=document.getElementById('frm');
+const fileInput=document.getElementById('file');
+const fileLabel=document.getElementById('fileLabel');
+const out=document.getElementById('out');
+
+fileInput.addEventListener('change', ()=> {
+  fileLabel.textContent = fileInput.files[0] ? fileInput.files[0].name : 'Choose .txt file';
+});
+form.addEventListener('submit', async (e)=>{
+  e.preventDefault();
+  out.textContent = 'Sending...';
+  const txt=document.getElementById('txt').value;
+  const file=fileInput.files[0];
+  const fd = new FormData();
+  if(file) fd.append('file', file);
+  else fd.append('text', txt);
+
+  try{
+    // Change this to your deployed Cloud Run URL
+    const API_URL = 'https://ai-extract-api-xxxxx.a.run.app/process';
+    // If you added API key protection, set a header using fetch with a custom header
+    const res = await fetch(API_URL, {
+      method:'POST',
+      body: fd,
+      // headers: { 'x-api-key': 'SOME_KEY' }  // uncomment if you use API key
+    });
+    const j = await res.json();
+    out.textContent = JSON.stringify(j, null, 2);
+  }catch(err){
+    out.textContent = 'Error: '+String(err);
+  }
+});
+document.getElementById('clear').addEventListener('click', ()=>{
+  document.getElementById('txt').value = '';
+  fileInput.value = null;
+  fileLabel.textContent = 'Choose .txt file';
+  out.textContent = 'No response yet.';
+});
+</script>
+</body>
+</html>
