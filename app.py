@@ -12,6 +12,7 @@ from fastapi.responses import JSONResponse
 from dotenv import load_dotenv
 from openai import OpenAI
 import dateparser
+from fastapi.middleware.cors import CORSMiddleware
 
 # optional spaCy fallback (used to augment OpenAI when needed)
 try:
@@ -22,8 +23,6 @@ except Exception:
 
 load_dotenv()
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
-API_KEY = os.getenv("API_KEY", None)
-
 if not OPENAI_KEY:
     print("Warning: OPENAI_API_KEY not set in environment. Set it in .env or env var.")
 client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
@@ -40,6 +39,14 @@ if not os.path.exists(CSV_FILE):
         writer.writeheader()
 
 app = FastAPI(title="AI Extract Pipeline (robust parsing + merge fallback)")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],                # <-- use specific origins in production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],                # must allow 'x-api-key' header from browser if used
+)
 
 # ---------------- helpers ----------------
 def normalize_date_to_iso(date_text: str) -> Optional[str]:
@@ -336,20 +343,8 @@ def process_text_content(contents: str, source_filename: str) -> Dict:
 async def root():
     return {"status": "ok", "endpoints": ["/process (POST)", "/process-batch (POST)", "/process-zip (POST)", "/csv"]}
 
-from fastapi import Header
-
 @app.post("/process")
-async def process(
-    request: Request,
-    text: Optional[str] = Form(None),
-    file: Optional[UploadFile] = File(None),
-    x_api_key: Optional[str] = Header(None)   # 👈 add this
-):
-    # --- API Key check ---
-    if API_KEY and x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Unauthorized")
-    # ----------------------
-
+async def process(request: Request, text: Optional[str] = Form(None), file: Optional[UploadFile] = File(None)):
     # support JSON body
     if not text and not file:
         try:
@@ -370,14 +365,10 @@ async def process(
         contents = text
         source_filename = "inline_text"
     else:
-        raise HTTPException(
-            status_code=400,
-            detail="Provide 'text' (JSON/form) or upload a text file named 'file'."
-        )
+        raise HTTPException(status_code=400, detail="Provide 'text' (JSON/form) or upload a text file named 'file'.")
 
     result = process_text_content(contents, source_filename)
     return JSONResponse(content=result)
-
 
 @app.post("/process-batch")
 async def process_batch(folder: Optional[str] = Form(None)):
