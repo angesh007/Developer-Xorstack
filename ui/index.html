@@ -11,9 +11,10 @@
     h1{margin:0 0 8px;font-size:20px}
     p.desc{margin:0 0 18px;color:var(--muted)}
     textarea{width:100%;min-height:160px;padding:12px;border-radius:8px;border:1px solid rgba(255,255,255,0.04);background:transparent;color:inherit;resize:vertical}
-    .row{display:flex;gap:12px;align-items:center}
-    .file{padding:12px;border-radius:8px;border:1px dashed rgba(255,255,255,0.04);display:inline-block}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .file{padding:12px;border-radius:8px;border:1px dashed rgba(255,255,255,0.04);display:inline-block;cursor:pointer}
     button{background:var(--btn);color:#022;border:none;padding:10px 16px;border-radius:8px;font-weight:600;cursor:pointer}
+    .muted{background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)}
     pre{white-space:pre-wrap;background:#021426;padding:12px;border-radius:8px;color:#cfe9f2;overflow:auto;max-height:320px}
     footer{margin-top:12px;color:var(--muted);font-size:13px}
     @media (max-width:600px){.row{flex-direction:column;align-items:stretch}}
@@ -27,12 +28,13 @@
     <form id="frm">
       <textarea id="txt" placeholder="Paste text here..."></textarea>
       <div class="row" style="margin-top:12px">
-        <label class="file">
+        <label class="file" for="file">
           <input id="file" type="file" accept=".txt" style="display:none" />
           <span id="fileLabel">Choose .txt file</span>
         </label>
         <button id="send" type="submit">Send</button>
-        <button id="clear" type="button" style="background:transparent;color:var(--muted);border:1px solid rgba(255,255,255,0.04)">Clear</button>
+        <button id="clear" type="button" class="muted">Clear</button>
+        <button id="downloadCsv" type="button" style="background:#0ea5e9;color:#fff">Download CSV</button>
       </div>
     </form>
 
@@ -42,43 +44,120 @@
   </div>
 
 <script>
-const form=document.getElementById('frm');
-const fileInput=document.getElementById('file');
-const fileLabel=document.getElementById('fileLabel');
-const out=document.getElementById('out');
+/*
+ Behavior:
+  - typing clears any selected file (explicit text choice)
+  - selecting a file clears the textarea (explicit file choice)
+  - after successful send, clear both inputs
+  - preserve response display
+  - Download CSV works as before
+*/
 
-fileInput.addEventListener('change', ()=> {
+const form = document.getElementById('frm');
+const fileInput = document.getElementById('file');
+const fileLabel = document.getElementById('fileLabel');
+const out = document.getElementById('out');
+const txtArea = document.getElementById('txt');
+const clearBtn = document.getElementById('clear');
+const downloadBtn = document.getElementById('downloadCsv');
+
+// CONFIG - update API_URL and API_KEY for your deployment
+const API_URL = 'https://developer-xorstack-260756305618.europe-west1.run.app';
+const API_KEY = 'HR-ACCESS-2025'; // DEMO ONLY: remove before public sharing
+
+// open file picker when clicking label
+fileLabel.addEventListener('click', () => fileInput.click());
+
+// when file selected -> show name & clear textarea (explicit file choice)
+fileInput.addEventListener('change', () => {
   fileLabel.textContent = fileInput.files[0] ? fileInput.files[0].name : 'Choose .txt file';
-});
-form.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  out.textContent = 'Sending...';
-  const txt=document.getElementById('txt').value;
-  const file=fileInput.files[0];
-  const fd = new FormData();
-  if(file) fd.append('file', file);
-  else fd.append('text', txt);
-
-  try{
-    // Change this to your deployed Cloud Run URL
-    const API_URL = 'https://ai-extract-api-xxxxx.a.run.app/process';
-    // If you added API key protection, set a header using fetch with a custom header
-    const res = await fetch(API_URL, {
-      method:'POST',
-      body: fd,
-      // headers: { 'x-api-key': 'SOME_KEY' }  // uncomment if you use API key
-    });
-    const j = await res.json();
-    out.textContent = JSON.stringify(j, null, 2);
-  }catch(err){
-    out.textContent = 'Error: '+String(err);
+  if (fileInput.files && fileInput.files.length > 0) {
+    txtArea.value = '';
   }
 });
-document.getElementById('clear').addEventListener('click', ()=>{
-  document.getElementById('txt').value = '';
-  fileInput.value = null;
+
+// when typing -> clear file selection (explicit text choice)
+txtArea.addEventListener('input', () => {
+  if ((txtArea.value || '').trim().length > 0 && fileInput.files && fileInput.files.length > 0) {
+    fileInput.value = '';
+    fileLabel.textContent = 'Choose .txt file';
+  }
+});
+
+// Clear button resets both fields and response
+clearBtn.addEventListener('click', () => {
+  txtArea.value = '';
+  fileInput.value = '';
   fileLabel.textContent = 'Choose .txt file';
   out.textContent = 'No response yet.';
+});
+
+// Submit handler: prefer typed text if present; otherwise send file.
+// On successful response, clear inputs and keep response shown.
+form.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  out.textContent = 'Sending...';
+
+  const typed = (txtArea.value || '').trim();
+  const file = (fileInput.files && fileInput.files[0]) ? fileInput.files[0] : null;
+
+  if (!typed && !file) {
+    out.textContent = 'Please paste text or choose a .txt file before sending.';
+    return;
+  }
+
+  const fd = new FormData();
+  if (typed) fd.append('text', txtArea.value);
+  else fd.append('file', file);
+
+  try {
+    const res = await fetch(`${API_URL}/process`, {
+      method: 'POST',
+      body: fd,
+      headers: { 'x-api-key': API_KEY }
+    });
+
+    const text = await res.text();
+    try {
+      const j = JSON.parse(text);
+      out.textContent = JSON.stringify(j, null, 2);
+    } catch (err) {
+      out.textContent = 'Non-JSON response:\n' + text;
+    }
+
+    // Clear inputs AFTER successful send
+    txtArea.value = '';
+    fileInput.value = '';
+    fileLabel.textContent = 'Choose .txt file';
+
+  } catch (err) {
+    out.textContent = 'Error: ' + String(err);
+  }
+});
+
+// Download CSV: fetch /csv endpoint, convert to CSV, download
+downloadBtn.addEventListener('click', async () => {
+  try {
+    const res = await fetch(`${API_URL}/csv?limit=1000`, { headers: { 'x-api-key': API_KEY } });
+    if (!res.ok) throw new Error('Server responded ' + res.status);
+    const j = await res.json();
+    if (!j.rows || !j.rows.length) { alert('No CSV data found.'); return; }
+    const fields = Object.keys(j.rows[0]);
+    const csv = [fields.join(',')].concat(
+      j.rows.map(r => fields.map(f => `"${(r[f]||'').replace(/"/g,'""')}"`).join(','))
+    ).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'results.csv';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    alert('Download failed: ' + String(err));
+  }
 });
 </script>
 </body>
