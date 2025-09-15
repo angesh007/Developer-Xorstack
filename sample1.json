@@ -1,0 +1,14 @@
+{
+  "persons": [
+    "John Doe",
+    "Jane Smith"
+  ],
+  "dates": [
+    "2020-01-05",
+    "2021-02-14"
+  ],
+  "locations": [
+    "New York"
+  ],
+  "source": "openai"
+}
