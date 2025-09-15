@@ -22,6 +22,8 @@ except Exception:
 
 load_dotenv()
 OPENAI_KEY = os.getenv("OPENAI_API_KEY")
+API_KEY = os.getenv("API_KEY", None)
+
 if not OPENAI_KEY:
     print("Warning: OPENAI_API_KEY not set in environment. Set it in .env or env var.")
 client = OpenAI(api_key=OPENAI_KEY) if OPENAI_KEY else None
@@ -334,8 +336,20 @@ def process_text_content(contents: str, source_filename: str) -> Dict:
 async def root():
     return {"status": "ok", "endpoints": ["/process (POST)", "/process-batch (POST)", "/process-zip (POST)", "/csv"]}
 
+from fastapi import Header
+
 @app.post("/process")
-async def process(request: Request, text: Optional[str] = Form(None), file: Optional[UploadFile] = File(None)):
+async def process(
+    request: Request,
+    text: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    x_api_key: Optional[str] = Header(None)   # 👈 add this
+):
+    # --- API Key check ---
+    if API_KEY and x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Unauthorized")
+    # ----------------------
+
     # support JSON body
     if not text and not file:
         try:
@@ -356,10 +370,14 @@ async def process(request: Request, text: Optional[str] = Form(None), file: Opti
         contents = text
         source_filename = "inline_text"
     else:
-        raise HTTPException(status_code=400, detail="Provide 'text' (JSON/form) or upload a text file named 'file'.")
+        raise HTTPException(
+            status_code=400,
+            detail="Provide 'text' (JSON/form) or upload a text file named 'file'."
+        )
 
     result = process_text_content(contents, source_filename)
     return JSONResponse(content=result)
+
 
 @app.post("/process-batch")
 async def process_batch(folder: Optional[str] = Form(None)):
